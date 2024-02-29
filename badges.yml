@@ -1,0 +1,28 @@
+---
+{% set sonar_key = project.path_with_namespace.replace("/", "-") %}
+{% set sonar_token = sonar_token(project=sonar_key).token %}
+{% set sonar_url = environ["SONARQUBE_URL"] %}
+badges:
+  Pipeline:
+    image_url: {{ gitlab_url }}/%{project_path}/badges/%{default_branch}/pipeline.svg
+    link_url: {{ gitlab_url }}/%{project_path}  #{project_path} is escape sequence managed by gitlab, not jinja
+    active: false  # True by default, Optional
+  Quality Gate:
+    link_url:  {{ sonar_url }}/dashboard?id={{ sonar_key }}
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=alert_status&token={{sonar_token}}
+  Bugs:
+    link_url: {{ sonar_url }}/project/issues?resolved=false&types=BUG&id={{ sonar_key }}
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=bugs&token={{sonar_token}}
+  Code Coverage:
+    link_url: {{ sonar_url }}/component_measures?metric=Coverage&view=list&id={{ sonar_key }}
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=coverage&token={{ sonar_token }}
+  Maintainability:
+    link_url: {{ sonar_url }}/component_measures?id={{ sonar_key }}&metric=sqale_rating&view=list
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=sqale_rating&token={{ sonar_token }}
+  Security Hotspots:
+    link_url: {{ sonar_url }}/component_measures?metric=Security&view=list&id={{ sonar_key }}
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=security_hotspots&token={{ sonar_token }}
+  Vulnerabilities:
+    link_url: {{ sonar_url }}/project/issues?resolved=false&types=VULNERABILITY&id={{ sonar_key }}
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=vulnerabilities&token={{ sonar_token }}
+
