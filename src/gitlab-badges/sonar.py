@@ -3,7 +3,6 @@ from typing import Any
 import os
 import requests
 import sys
-from sonarqube import SonarQubeClient
 from base64 import b64encode
 from functools import lru_cache
 
@@ -19,8 +18,7 @@ def bearer_auth(token: str) -> str:
 
 
 @lru_cache
-def plugin(**kwargs) -> dict[str, Any]:
-    project = kwargs["project"]
+def plugin(project: str) -> dict[str, Any]:
     assert project
     url = os.environ["SONARQUBE_URL"]
     if url.endswith("/"):
@@ -35,11 +33,6 @@ def plugin(**kwargs) -> dict[str, Any]:
         params["username"] = os.environ["SONARQUBE_USERNAME"]
         params["password"] = os.environ["SONARQUBE_PASSWORD"]
         headers["Authorization"] = basic_auth(params["username"], params["password"])
-
-    sonar = SonarQubeClient(sonarqube_url=url, **params)
-    assert (
-        sonar.auth.check_credentials()
-    ), "Connection to sonar is not valid, check credentials"
 
     valid_con = requests.get(
         f"{url}/api/authentication/validate", headers=headers

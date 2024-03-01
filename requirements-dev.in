@@ -3,6 +3,7 @@ black
 flake8
 isort
 mypy
+dict_or_badge
 pytest
 pytest-cov
-
+ruff

@@ -2,10 +2,12 @@
 import argparse
 import os
 import gitlab
+from gitlab.v4.objects.badges import ProjectBadge
+from gitlab.v4.objects.projects import Project
 from gitlab.exceptions import GitlabOperationError
 import yaml
 from yaml.scanner import ScannerError
-from typing import Any
+from typing import Any, Union, cast
 from sonar import plugin as sonar_plugin
 from jinja2 import Template
 
@@ -19,17 +21,18 @@ def get_default_server_url() -> str:
     return server_url
 
 
-def evaluate_yaml(yaml_file: str, scope: dict[str, Any]):
+def evaluate_yaml(yaml_file: str, scope: dict[str, Any]) -> dict[str, Any]:
     with open(yaml_file, "rt", encoding="UTF-8") as f:
         tpl = Template(f.read())
     result = tpl.render(**scope)
     try:
         yaml_content = yaml.safe_load(result)
+        assert isinstance(yaml_content, dict)
+        return yaml_content
     except ScannerError as err:
         msg = f"{err} while reading rendered YAML file from {yaml_file}"
         print("[ERROR]", msg, "\nContent:\n", result)
         raise RuntimeError(msg) from err
-    return yaml_content
 
 
 def should_perform_operation(res: Any, operation: str) -> bool:
@@ -49,36 +52,41 @@ def should_perform_operation(res: Any, operation: str) -> bool:
         return True
     return False
 
-def refresh_badges(project: Any) -> dict[str, dict[str, Any]]:
-    badges_found: dict[str, dict[str, Any]] = {}
+
+def refresh_badges(project: Project) -> dict[str, ProjectBadge]:
+    badges_found: dict[str, ProjectBadge] = {}
     for badge in project.badges.list(all=True):
         if badge.kind == "project":
             # We don't deal with group badges
-            badges_found[badge.name] = badge
+            badges_found[badge.name] = cast(ProjectBadge, badge)
     return badges_found
 
+
 def perform_operation(
-    gl: gitlab.Gitlab, project_id, operation: str, badge: dict[str, str]
+    project: Project, operation: str, badge: Union[ProjectBadge, dict[str, Any]]
 ) -> None:
     try:
         if operation == "add":
-            gl.projects.get(project_id).badges.create(badge)
+            assert isinstance(badge, dict)
+            project.badges.create(badge)
         elif operation == "modify":
-            gl.projects.get(project_id).badges.update(badge["id"], badge)
+            assert isinstance(badge, dict)
+            project.badges.update(badge["id"], badge)
         elif operation == "delete":
-            gl.projects.get(project_id).badges.delete(badge.id)
+            assert isinstance(badge, ProjectBadge)
+            project.badges.delete(badge.id)
         else:
             assert False, f"Unexpected operation={operation}"
     except GitlabOperationError as err:
         print(
-            f"[ERROR] performing {operation} on {project_id} with payload {badge}: {err}"
+            f"[ERROR] performing {operation} on {project.get_id()} with payload {badge}: {err}"
         )
         raise
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Synchronize badges for a repository")
-    
+
     parser.add_argument(
         "--gitlab-token",
         dest="gitlab_token",
@@ -129,20 +137,26 @@ def main() -> None:
     )
     parser.add_argument(
         "--show-badges-summary",
-        action='store_true',
+        action="store_true",
         default=False,
         help="Show badges summary with format specified by badges-summary-format",
     )
-    DEFAULT_BADGE_SUMMARY="[![{badge.name}]({badge.image_url})]({badge.link_url})"
+    DEFAULT_BADGE_SUMMARY = "[![{badge.name}]({badge.image_url})]({badge.link_url})"
     parser.add_argument(
         "--badges-summary-format",
         dest="badges_summary_format",
         default=DEFAULT_BADGE_SUMMARY,
         help=f"if --show-badges-summary is set, display badges with fancy formatting, default is markdown compatible: {DEFAULT_BADGE_SUMMARY}",
     )
-    parser.add_argument("--yaml-file", dest="yaml_file", help="template to select the badge to set")
-    parser.add_argument('project_ids', help='All the projects IDs to run the command on', nargs=argparse.REMAINDER)
-    
+    parser.add_argument(
+        "--yaml-file", dest="yaml_file", help="template to select the badge to set"
+    )
+    parser.add_argument(
+        "project_ids",
+        help="All the projects IDs to run the command on",
+        nargs=argparse.REMAINDER,
+    )
+
     res = parser.parse_args()
 
     if not res.token_value:
@@ -160,7 +174,7 @@ def main() -> None:
     args = {res.token_type: res.token_value}
     gl = gitlab.Gitlab(url=res.server_url, **args)  # type: ignore[arg-type,unused-ignore]  # noqa: arg-type
 
-    gl.auth()    
+    gl.auth()
     for project_id in res.project_ids:
         project = gl.projects.get(project_id)
         badges_modified = False
@@ -169,10 +183,12 @@ def main() -> None:
         if badges_found:
             print(project)
             print(f"[INFO]{project.name}[{project.id}] {project.web_url}")
-            print(f"[INFO]{project.name}[{project.id}] Found {len(badges_found)} badges:", ", ".join(badges_found.keys()))
+            print(
+                f"[INFO]{project.name}[{project.id}] Found {len(badges_found)} badges:",
+                ", ".join(badges_found.keys()),
+            )
         else:
             print(f"[INFO]{project.name}[{project.id}] No existing badges found")
-            
 
         if res.yaml_file:
             scope = {
@@ -182,7 +198,7 @@ def main() -> None:
                 "project": project,
                 "sonar_token": sonar_plugin,
             }
-            operations: dict[str, dict[str, str]] = {
+            operations: dict[str, list[Union[dict[str, str], ProjectBadge]]] = {
                 "add": [],
                 "modify": [],
                 "delete": [],
@@ -208,7 +224,7 @@ def main() -> None:
                 if badges:
                     badge_names = "\n - ".join(
                         map(
-                            lambda a: a.get("name")
+                            lambda a: str(a.get("name"))
                             if isinstance(a, dict)
                             else f"{a.name} [{a.id}]",
                             badges,
@@ -218,20 +234,22 @@ def main() -> None:
                         f"About to {operation} the {len(badges)} following badge(s):\n - {badge_names}"
                     )
                     if should_perform_operation(res, operation):
-                        for badge in badges:
+                        for dict_or_badge in badges:
                             perform_operation(
-                                gl=gl,
-                                project_id=project_id,
+                                project=project,
                                 operation=operation,
-                                badge=badge,
+                                badge=dict_or_badge,
                             )
-                            badges_modified=True
+                            badges_modified = True
         if badges_modified:
             badges_found = refresh_badges(project=project)
         if res.badges_summary_format and badges_found:
-            print(f"[INFO]{project.name}[{project.id}] summary with format --badges-summary-format={res.badges_summary_format}")
+            print(
+                f"[INFO]{project.name}[{project.id}] summary with format --badges-summary-format={res.badges_summary_format}"
+            )
             for badge in badges_found.values():
                 print(res.badges_summary_format.format_map({"badge": badge}))
+
 
 if __name__ == "__main__":
     main()
