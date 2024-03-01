@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "gitlab-badges"
+version = "1.0"
+
+authors = ["Pierre Souchay"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+description = "Synchronize the badges of Gitlab"
+homepage = "https://github.com/pierresouchay/gitlab-badges"
+include = [
+    "LICENSE.txt"
+]
+keywords = ["gitlab", "sonar", "sonarqube", "sync"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/pierresouchay/gitlab-badges"
+
+
+[tool.poetry.dependencies]
+python = ">= 3.9"
+jinja2 = ">= 3.1.3"
+python-gitlab = ">= 4.4.0"
+pyyaml = ">= 6.0.1"
+
+[tool.poetry.scripts]
+gitlab-badges = "gitlab_badges.main:main"
+
+[tool.black]
+line-length = 120
+exclude = ".pyi$"
+
+[tool.poetry.dev-dependencies]
+black = ">= 22.3.0"
+coverage = ">= 6.4.4"
+flake8 = ">= 6.1.0"
+mypy   = ">= 1.7.0"
+pylint = ">= 2.15.2"
+pytest = ">= 7.1.3"
+pytest-coverage = ">= 0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

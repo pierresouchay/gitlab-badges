@@ -19,6 +19,9 @@ badges:
   Maintainability:
     link_url: {{ sonar_url }}/component_measures?id={{ sonar_key }}&metric=sqale_rating&view=list
     image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=sqale_rating&token={{ sonar_token }}
+  Reliability:
+    link_url: {{ sonar_url }}/component_measures?id={{ sonar_key }}&metric=reliability_rating&view=list
+    image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=reliability_rating&token={{ sonar_token }}
   Security Hotspots:
     link_url: {{ sonar_url }}/component_measures?metric=Security&view=list&id={{ sonar_key }}
     image_url: {{ sonar_url }}/api/project_badges/measure?project={{ sonar_key }}&metric=security_hotspots&token={{ sonar_token }}

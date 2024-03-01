@@ -8,7 +8,7 @@ from gitlab.exceptions import GitlabOperationError
 import yaml
 from yaml.scanner import ScannerError
 from typing import Any, Union, cast
-from sonar import plugin as sonar_plugin
+from .sonar import plugin as sonar_plugin
 from jinja2 import Template
 
 
